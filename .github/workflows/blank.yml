@@ -1,0 +1,45 @@
+name: Auto Label Team PR (by Team Membership)
+
+on:
+  # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
+  pull_request:
+    types: [opened, reopened]
+
+env:
+  # ➡️ 1. REMPLACEZ CETTE VALEUR : Le SLUG de votre équipe (tout en minuscules, sans espace, SANS le nom de l'organisation).
+  #    Exemple : si votre équipe s'appelle "Développeurs Front-end", le slug est probablement "developpeurs-front-end".
+  TEAM_SLUG: "votre-team-slug-ici"
+  # ➡️ 2. Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
+  PR_LABEL: "team-contribution"
+
+jobs:
+  label_pr:
+    # Ce job s'exécute uniquement si l'auteur de la PR n'est pas un bot et que la PR est dans le repo principal (pas un fork).
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # ESSENTIEL pour pouvoir ajouter le label.
+
+    steps:
+      - name: 'Check team membership'
+        id: check_team
+        # ⚠️ Utilise une action tierce pour vérifier l'appartenance à une équipe.
+        uses: org-action/check-team-membership@v1
+        with:
+          # Le jeton d'accès fourni par GitHub est suffisant.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # L'auteur de la Pull Request
+          user: ${{ github.event.pull_request.user.login }}
+          # Le nom de l'organisation est extrait automatiquement
+          organization: ${{ github.repository_owner }} 
+          # Le slug de l'équipe défini ci-dessus
+          team: ${{ env.TEAM_SLUG }}
+
+      - name: 'Apply specified label if author is team member'
+        # N'exécute cette étape que si le résultat de l'étape précédente est "true".
+        if: steps.check_team.outputs.is-member == 'true'
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{ env.PR_LABEL }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
