@@ -27,7 +27,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
+      - name: Install dependencies (Octokit)
+        # Installe la librairie Octokit nécessaire pour le script
+        run: npm install @octokit/rest
       - name: Check team membership and apply label
         id: check_label
         # Exécute le script Node.js qui fera le travail
