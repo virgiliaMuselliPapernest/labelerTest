@@ -1,64 +1,66 @@
-// Fichier: .github/workflows/check-team.js
+name: Auto Label Team PR (by Team Membership)
 
-const { Octokit } = require("@octokit/rest");
+on:
+  # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
+  pull_request:
+    types: [opened, reopened]
 
-async function run() {
-  const token = process.env.GITHUB_TOKEN;
-  const org = process.env.ORGANIZATION;
-  const teamSlug = process.env.TEAM_SLUG;
-  const username = process.env.PR_AUTHOR;
-  const prNumber = process.env.PR_NUMBER;
-  const label = process.env.PR_LABEL;
+env:
+  # ➡️ 1. REMPLACEZ CECI : Le SLUG de votre équipe (tout en minuscules, sans l'organisation).
+  TEAM_SLUG: "app-b2c"
+  # ➡️ 2. Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
+  PR_LABEL: "AppCore"
 
-  if (!token || !org || !teamSlug || !username || !prNumber || !label) {
-    console.error("Missing environment variables.");
-    process.exit(1);
-  }
+jobs:
+  label_pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # ESSENTIEL pour ajouter le label.
 
-  // Initialisation du client GitHub (Octokit)
-  const octokit = new Octokit({ auth: token });
-  const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
+    steps:
+      - name: Check Team Membership and Apply Label
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const teamSlug = process.env.TEAM_SLUG;
+            const prAuthor = context.payload.pull_request.user.login;
+            const org = context.repo.owner;
+            const prNumber = context.issue.number;
+            const label = process.env.PR_LABEL;
 
-  console.log(`Checking if user ${username} is a member of team ${org}/${teamSlug}...`);
+            console.log(`Checking if user ${prAuthor} is a member of team ${org}/${teamSlug}...`);
 
-  try {
-    // 1. Vérification de l'appartenance à l'équipe via l'API REST de GitHub
-    // endpoint: GET /orgs/{org}/teams/{team_slug}/memberships/{username}
-    await octokit.teams.getMembershipForUserInOrg({
-      org: org,
-      team_slug: teamSlug,
-      username: username,
-    });
+            try {
+              // Appelle l'API REST de GitHub pour vérifier l'appartenance à l'équipe.
+              // L'endpoint est : GET /orgs/{org}/teams/{team_slug}/memberships/{username}
+              await github.rest.teams.getMembershipForUserInOrg({
+                org: org,
+                team_slug: teamSlug,
+                username: prAuthor,
+              });
 
-    // Si la requête réussit, l'utilisateur est membre de l'équipe.
-    console.log(`✅ User ${username} is a member of the team! Applying label "${label}" to PR #${prNumber}.`);
+              // Si la requête réussit, cela signifie que l'utilisateur est membre (statut 200).
+              console.log(`✅ User ${prAuthor} is a member of the team! Applying label "${label}" to PR #${prNumber}.`);
 
-    // 2. Application du label à la Pull Request
-    await octokit.issues.addLabels({
-      owner: org,
-      repo: repo,
-      issue_number: prNumber,
-      labels: [label],
-    });
+              // Application du label à la Pull Request
+              await github.rest.issues.addLabels({
+                owner: org,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: [label],
+              });
 
-    console.log(`Label "${label}" applied successfully.`);
+              console.log(`Label "${label}" applied successfully.`);
 
-  } catch (error) {
-    // Si la requête échoue avec un code 404, l'utilisateur n'est pas membre ou le jeton n'a pas la permission.
-    if (error.status === 404) {
-      console.log(`❌ User ${username} is NOT a member of the team or team slug is wrong. Skipping label.`);
-    } else {
-      console.error(`An error occurred while checking team membership or adding label:`, error.message);
-      // NOTE: Un code 403 (Forbidden) indique souvent un problème de permission avec le GITHUB_TOKEN.
-    }
-  }
-}
-
-// Pour utiliser 'require' dans le script Node.js sans installer Octokit à chaque fois, 
-// nous allons simuler un `npm install` dans le workflow YAML.
-// Cependant, pour simplifier, nous allons utiliser directement l'API REST de GitHub
-// via un simple `curl` (méthode encore plus simple) ou en ajoutant une étape d'installation.
-
-// Mieux : ajoutons l'installation simple au YAML, c'est plus propre que curl.
-// Le script JS doit être exécuté :
-run();
+            } catch (error) {
+              // Si la requête échoue (généralement statut 404), l'utilisateur n'est pas membre.
+              if (error.status === 404) {
+                console.log(`❌ User ${prAuthor} is NOT a member of the team. Skipping label.`);
+              } else {
+                console.error(`An error occurred:`, error.message);
+                // Un statut 403 (Forbidden) indique généralement un problème de permission du GITHUB_TOKEN.
+                throw new Error(`Failed to check team membership or apply label. Status: ${error.status}`);
+              }
+            }
