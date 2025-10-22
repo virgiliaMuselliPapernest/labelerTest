@@ -1,69 +1,58 @@
-name: Auto Label Team PR (Official GitHub Script) 🔒
+name: Auto Label Team PR
 
 on:
-  # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
+  # Déclenche le workflow lors de l'ouverture ou de la réouverture d'une pull request.
   pull_request:
     types: [opened, reopened]
 
+# Les variables d'environnement sont utilisées pour définir facilement les membres de l'équipe et le label.
 env:
-  # ➡️ 1. REMPLACEZ CECI : Le SLUG de votre équipe (ex: "dev-backend" ou "qa-team").
-  TEAM_SLUG: "app-b2c"
-  # ➡️ 2. Le nom du label à appliquer.
+  # Liste des noms d'utilisateur GitHub des membres de l'équipe, séparés par des virgules.
+  TEAM_MEMBERS: "VirgiliaMuselliPapernest"
+  # Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
   PR_LABEL: "AppCore"
 
 jobs:
   label_pr:
+    # S'assure que le job ne s'exécute que sur les dépôts GitHub (pas sur les forks externes).
+    # Cela permet d'accéder aux secrets et aux jetons de manière sécurisée.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write # ESSENTIEL pour ajouter le label.
+      pull-requests: write # Nécessaire pour ajouter un label à la PR.
 
     steps:
-      - name: Check Team Membership and Apply Label
-        # C'est l'action qui remplace l'action introuvable.
-        uses: actions/github-script@v7 
+      - name: 'Check if PR author is a team member'
+        id: check_author
+        # Utilise une commande shell pour vérifier si l'auteur de la PR est dans la liste.
+        # Le résultat (true/false) est stocké dans la sortie du step.
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          MEMBERS_LIST=$(echo "${{ env.TEAM_MEMBERS }}" | tr -d '[:space:]' | tr ',' '\n')
+          
+          if echo "$MEMBERS_LIST" | grep -q "^$AUTHOR$"; then
+            echo "PR author '$AUTHOR' is a team member."
+            echo "is_team_member=true" >> $GITHUB_OUTPUT
+          else
+            echo "PR author '$AUTHOR' is NOT a team member. Skipping label."
+            echo "is_team_member=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 'Add label if author is team member'
+        # N'exécute cette étape que si le step précédent a déterminé que l'auteur est membre de l'équipe.
+        if: steps.check_author.outputs.is_team_member == 'true'
+        uses: actions/labeler@v4 # Une action GitHub pour gérer les labels.
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // Récupération des variables nécessaires
-            const teamSlug = process.env.TEAM_SLUG;
-            const prAuthor = context.payload.pull_request.user.login;
-            const org = context.repo.owner;
-            const prNumber = context.issue.number;
-            const label = process.env.PR_LABEL;
-
-            console.log(`Checking if user ${prAuthor} is a member of team ${org}/${teamSlug}...`);
-
-            try {
-              // 1. Appel à l'API GitHub pour vérifier l'appartenance à l'équipe.
-              // Succès (statut 200) signifie que l'utilisateur est membre.
-              await github.rest.teams.getMembershipForUserInOrg({
-                org: org,
-                team_slug: teamSlug,
-                username: prAuthor,
-              });
-
-              console.log(`✅ User ${prAuthor} is a member! Applying label "${label}".`);
-
-              // 2. Application du label
-              await github.rest.issues.addLabels({
-                owner: org,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                labels: [label],
-              });
-
-              console.log(`Label "${label}" applied successfully.`);
-
-            } catch (error) {
-              // Si l'API retourne une erreur 404 (Not Found), l'utilisateur n'est PAS membre.
-              if (error.status === 404) {
-                console.log(`❌ User ${prAuthor} is NOT a team member. Skipping label.`);
-              } 
-              // Si c'est une autre erreur (ex: 403 Forbidden, problème de token), on signale l'échec.
-              else {
-                console.error(`An unexpected error occurred (Status: ${error.status}):`, error.message);
-                // On lève une erreur pour faire échouer le job et alerter l'utilisateur.
-                throw new Error(`Failed to check team membership. Check GITHUB_TOKEN permissions.`);
-              }
-            }
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          # L'action labeler nécessite un fichier de configuration, mais on peut la contourner
+          # en utilisant l'option 'sync-labels' et en définissant le label.
+          # Cependant, pour une simple application, l'utilisation directe de l'API est souvent plus simple.
+          # Remplaçons par une action plus directe pour appliquer un label:
+          
+      - name: 'Apply specified label'
+        if: steps.check_author.outputs.is_team_member == 'true'
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{ env.PR_LABEL }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
