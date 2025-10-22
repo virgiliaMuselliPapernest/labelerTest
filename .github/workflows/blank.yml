@@ -1,45 +1,42 @@
 name: Auto Label Team PR (by Team Membership)
 
 on:
-  # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
   pull_request:
     types: [opened, reopened]
 
 env:
-  # ➡️ 1. REMPLACEZ CETTE VALEUR : Le SLUG de votre équipe (tout en minuscules, sans espace, SANS le nom de l'organisation).
-  #    Exemple : si votre équipe s'appelle "Développeurs Front-end", le slug est probablement "developpeurs-front-end".
+  # ➡️ 1. REMPLACEZ : Le SLUG de votre équipe (tout en minuscules, sans l'organisation).
   TEAM_SLUG: "app-b2c"
-  # ➡️ 2. Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
+  # ➡️ 2. Le nom du label à appliquer.
   PR_LABEL: "AppCore"
 
 jobs:
   label_pr:
-    # Ce job s'exécute uniquement si l'auteur de la PR n'est pas un bot et que la PR est dans le repo principal (pas un fork).
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write # ESSENTIEL pour pouvoir ajouter le label.
-
+      pull-requests: write # Nécessaire pour ajouter un label.
+      
     steps:
-      - name: 'Check team membership'
-        id: check_team
-        # ⚠️ Utilise une action tierce pour vérifier l'appartenance à une équipe.
-        uses: org-action/check-team-membership@v1
-        with:
-          # Le jeton d'accès fourni par GitHub est suffisant.
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # L'auteur de la Pull Request
-          user: ${{ github.event.pull_request.user.login }}
-          # Le nom de l'organisation est extrait automatiquement
-          organization: ${{ github.repository_owner }} 
-          # Le slug de l'équipe défini ci-dessus
-          team: ${{ env.TEAM_SLUG }}
+      - name: Checkout code
+        # Nécessaire pour accéder au script JavaScript dans le dépôt
+        uses: actions/checkout@v4
 
-      - name: 'Apply specified label if author is team member'
-        # N'exécute cette étape que si le résultat de l'étape précédente est "true".
-        if: steps.check_team.outputs.is-member == 'true'
-        uses: actions-ecosystem/action-add-labels@v1
+      - name: Setup Node.js
+        # Configure l'environnement Node.js
+        uses: actions/setup-node@v4
         with:
-          labels: ${{ env.PR_LABEL }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '20'
+
+      - name: Check team membership and apply label
+        id: check_label
+        # Exécute le script Node.js qui fera le travail
+        run: node .github/workflows/check-team.js
+        env:
+          # Passe les variables nécessaires au script JS
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          ORGANIZATION: ${{ github.repository_owner }}
+          TEAM_SLUG: ${{ env.TEAM_SLUG }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_LABEL: ${{ env.PR_LABEL }}
