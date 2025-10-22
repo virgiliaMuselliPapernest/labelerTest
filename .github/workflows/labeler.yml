@@ -1,11 +1,12 @@
-name: Auto Label Team PR (by Team Membership)
+name: Auto Label Team PR (Official Method) 🚀
 
 on:
+  # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
   pull_request:
     types: [opened, reopened]
 
 env:
-  # ➡️ 1. REMPLACEZ : Le SLUG de votre équipe (tout en minuscules, sans l'organisation).
+  # ➡️ 1. REMPLACEZ CECI : Le SLUG de votre équipe (tout en minuscules, ex: "dev-backend").
   TEAM_SLUG: "app-b2c"
   # ➡️ 2. Le nom du label à appliquer.
   PR_LABEL: "AppCore"
@@ -15,30 +16,52 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write # Nécessaire pour ajouter un label.
-      
-    steps:
-      - name: Checkout code
-        # Nécessaire pour accéder au script JavaScript dans le dépôt
-        uses: actions/checkout@v4
+      pull-requests: write # ESSENTIEL pour ajouter le label.
 
-      - name: Setup Node.js
-        # Configure l'environnement Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - name: Check Team Membership and Apply Label
+        # Utilisation de l'action officielle GitHub pour exécuter du code JavaScript
+        uses: actions/github-script@v7 
         with:
-          node-version: '20'
-      - name: Install dependencies (Octokit)
-        # Installe la librairie Octokit nécessaire pour le script
-        run: npm install @octokit/rest
-      - name: Check team membership and apply label
-        id: check_label
-        # Exécute le script Node.js qui fera le travail
-        run: node .github/workflows/check-team.js
-        env:
-          # Passe les variables nécessaires au script JS
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          ORGANIZATION: ${{ github.repository_owner }}
-          TEAM_SLUG: ${{ env.TEAM_SLUG }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_LABEL: ${{ env.PR_LABEL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Récupération des variables d'environnement et de contexte
+            const teamSlug = process.env.TEAM_SLUG;
+            const prAuthor = context.payload.pull_request.user.login;
+            const org = context.repo.owner;
+            const prNumber = context.issue.number;
+            const label = process.env.PR_LABEL;
+
+            console.log(`Checking if user ${prAuthor} is a member of team ${org}/${teamSlug}...`);
+
+            try {
+              // Appel à l'API GitHub pour vérifier l'appartenance à l'équipe.
+              // En cas de succès, l'utilisateur est membre (statut 200).
+              await github.rest.teams.getMembershipForUserInOrg({
+                org: org,
+                team_slug: teamSlug,
+                username: prAuthor,
+              });
+
+              console.log(`✅ User ${prAuthor} is a member! Applying label "${label}".`);
+
+              // Application du label
+              await github.rest.issues.addLabels({
+                owner: org,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: [label],
+              });
+
+              console.log(`Label "${label}" applied successfully.`);
+
+            } catch (error) {
+              // Si l'API retourne une erreur 404, cela signifie que l'utilisateur n'est pas membre.
+              if (error.status === 404) {
+                console.log(`❌ User ${prAuthor} is NOT a team member. Skipping label.`);
+              } else {
+                // Pour toute autre erreur (comme un 403 Forbidden), on la loggue et on lève une erreur.
+                console.error(`An unexpected error occurred:`, error.message);
+                throw new Error(`Failed to check team membership. Status: ${error.status}`);
+              }
+            }
