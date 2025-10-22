@@ -8,9 +8,9 @@ on:
 env:
   # ➡️ 1. REMPLACEZ CETTE VALEUR : Le SLUG de votre équipe (tout en minuscules, sans espace, SANS le nom de l'organisation).
   #    Exemple : si votre équipe s'appelle "Développeurs Front-end", le slug est probablement "developpeurs-front-end".
-  TEAM_SLUG: "votre-team-slug-ici"
+  TEAM_SLUG: "app-b2c"
   # ➡️ 2. Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
-  PR_LABEL: "team-contribution"
+  PR_LABEL: "AppCore"
 
 jobs:
   label_pr:
