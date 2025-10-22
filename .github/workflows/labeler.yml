@@ -8,7 +8,7 @@ on:
 # Les variables d'environnement sont utilisées pour définir facilement les membres de l'équipe et le label.
 env:
   # Liste des noms d'utilisateur GitHub des membres de l'équipe, séparés par des virgules.
-  TEAM_MEMBERS: "VirgiliaMuselliPapernest"
+  TEAM_MEMBERS: "virgiliaMuselliPapernest"
   # Le nom du label à appliquer. Assurez-vous qu'il existe dans le dépôt.
   PR_LABEL: "AppCore"
 
