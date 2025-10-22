@@ -1,4 +1,4 @@
-name: Auto Label Team PR (Official Method) 🚀
+name: Auto Label Team PR (Official GitHub Script) 🔒
 
 on:
   # Déclenche le workflow lors de la création ou de la réouverture d'une Pull Request.
@@ -6,7 +6,7 @@ on:
     types: [opened, reopened]
 
 env:
-  # ➡️ 1. REMPLACEZ CECI : Le SLUG de votre équipe (tout en minuscules, ex: "dev-backend").
+  # ➡️ 1. REMPLACEZ CECI : Le SLUG de votre équipe (ex: "dev-backend" ou "qa-team").
   TEAM_SLUG: "app-b2c"
   # ➡️ 2. Le nom du label à appliquer.
   PR_LABEL: "AppCore"
@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Check Team Membership and Apply Label
-        # Utilisation de l'action officielle GitHub pour exécuter du code JavaScript
+        # C'est l'action qui remplace l'action introuvable.
         uses: actions/github-script@v7 
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Récupération des variables d'environnement et de contexte
+            // Récupération des variables nécessaires
             const teamSlug = process.env.TEAM_SLUG;
             const prAuthor = context.payload.pull_request.user.login;
             const org = context.repo.owner;
@@ -35,8 +35,8 @@ jobs:
             console.log(`Checking if user ${prAuthor} is a member of team ${org}/${teamSlug}...`);
 
             try {
-              // Appel à l'API GitHub pour vérifier l'appartenance à l'équipe.
-              // En cas de succès, l'utilisateur est membre (statut 200).
+              // 1. Appel à l'API GitHub pour vérifier l'appartenance à l'équipe.
+              // Succès (statut 200) signifie que l'utilisateur est membre.
               await github.rest.teams.getMembershipForUserInOrg({
                 org: org,
                 team_slug: teamSlug,
@@ -45,7 +45,7 @@ jobs:
 
               console.log(`✅ User ${prAuthor} is a member! Applying label "${label}".`);
 
-              // Application du label
+              // 2. Application du label
               await github.rest.issues.addLabels({
                 owner: org,
                 repo: context.repo.repo,
@@ -56,12 +56,14 @@ jobs:
               console.log(`Label "${label}" applied successfully.`);
 
             } catch (error) {
-              // Si l'API retourne une erreur 404, cela signifie que l'utilisateur n'est pas membre.
+              // Si l'API retourne une erreur 404 (Not Found), l'utilisateur n'est PAS membre.
               if (error.status === 404) {
                 console.log(`❌ User ${prAuthor} is NOT a team member. Skipping label.`);
-              } else {
-                // Pour toute autre erreur (comme un 403 Forbidden), on la loggue et on lève une erreur.
-                console.error(`An unexpected error occurred:`, error.message);
-                throw new Error(`Failed to check team membership. Status: ${error.status}`);
+              } 
+              // Si c'est une autre erreur (ex: 403 Forbidden, problème de token), on signale l'échec.
+              else {
+                console.error(`An unexpected error occurred (Status: ${error.status}):`, error.message);
+                // On lève une erreur pour faire échouer le job et alerter l'utilisateur.
+                throw new Error(`Failed to check team membership. Check GITHUB_TOKEN permissions.`);
               }
             }
