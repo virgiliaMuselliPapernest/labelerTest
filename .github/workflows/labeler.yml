@@ -39,17 +39,6 @@ jobs:
             echo "is_team_member=false" >> $GITHUB_OUTPUT
           fi
           
-      - name: 'Add label if author is team member'
-        # N'exécute cette étape que si le step précédent a déterminé que l'auteur est membre de l'équipe.
-        if: steps.check_author.outputs.is_team_member == 'true'
-        uses: actions/labeler@v4 # Une action GitHub pour gérer les labels.
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          # L'action labeler nécessite un fichier de configuration, mais on peut la contourner
-          # en utilisant l'option 'sync-labels' et en définissant le label.
-          # Cependant, pour une simple application, l'utilisation directe de l'API est souvent plus simple.
-          # Remplaçons par une action plus directe pour appliquer un label:
-          
       - name: 'Apply specified label'
         if: steps.check_author.outputs.is_team_member == 'true'
         uses: actions-ecosystem/action-add-labels@v1
